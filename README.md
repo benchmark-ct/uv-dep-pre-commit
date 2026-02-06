@@ -23,7 +23,7 @@ Add this hook to your `.pre-commit-config.yaml`:
 
 ```yaml
 repos:
-  - repo: https://github.com/yourusername/uv-pre-commit
+  - repo: https://github.com/bb-takeoffs/uv-pre-commit
     rev: v0.1.0  # Use the latest version
     hooks:
       - id: check-uv-sources
@@ -108,7 +108,7 @@ check-uv-sources project1/pyproject.toml project2/pyproject.toml
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/uv-pre-commit
+git clone https://github.com/bb-takeoffs/uv-pre-commit
 cd uv-pre-commit
 
 # Install in development mode with test dependencies
