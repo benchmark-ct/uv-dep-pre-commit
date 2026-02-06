@@ -23,8 +23,22 @@ def get_git_version(file_path: Path) -> Optional[str]:
     Returns None if the file is not in git or is new.
     """
     try:
+        # Get the git repository root
+        git_root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=file_path.parent,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        git_root = Path(git_root_result.stdout.strip())
+
+        # Convert to relative path from git root
+        relative_path = file_path.resolve().relative_to(git_root)
+
         result = subprocess.run(
-            ["git", "show", f"HEAD:{file_path}"],
+            ["git", "show", f"HEAD:{relative_path}"],
+            cwd=git_root,
             capture_output=True,
             text=True,
             check=True,
@@ -32,6 +46,9 @@ def get_git_version(file_path: Path) -> Optional[str]:
         return result.stdout
     except subprocess.CalledProcessError:
         # File doesn't exist in HEAD (new file) or not in a git repo
+        return None
+    except ValueError:
+        # File is not within the git repository
         return None
 
 
@@ -123,12 +140,21 @@ def check_file(file_path: Path) -> int:
     if violations:
         print("ERROR: Git sources were changed to non-git sources!", file=sys.stderr)
         print(file=sys.stderr)
-        print("The following packages were git sources but are no longer:", file=sys.stderr)
+        print(
+            "The following packages were git sources but are no longer:",
+            file=sys.stderr,
+        )
         for package_name, old_type, new_type in violations:
             print(f"  - {package_name}: {old_type} -> {new_type}", file=sys.stderr)
         print(file=sys.stderr)
-        print("This likely means you have local development changes that shouldn't be committed.", file=sys.stderr)
-        print("Please revert these sources back to their git configurations.", file=sys.stderr)
+        print(
+            "This likely means you have local development changes that shouldn't be committed.",
+            file=sys.stderr,
+        )
+        print(
+            "Please revert these sources back to their git configurations.",
+            file=sys.stderr,
+        )
         return 1
 
     return 0
