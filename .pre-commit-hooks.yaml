@@ -1,0 +1,7 @@
+- id: check-uv-sources
+  name: Check UV Sources
+  description: Ensure git sources in tool.uv.sources remain git sources
+  entry: check-uv-sources
+  language: python
+  files: pyproject\.toml$
+  pass_filenames: true
