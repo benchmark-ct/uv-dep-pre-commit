@@ -1,0 +1,15 @@
+name: gitleaks
+
+# BCT-1364: secret scan of new commits. The logic and rules live in
+# benchmark-ct/.github/.github/workflows/gitleaks.yml.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    uses: benchmark-ct/.github/.github/workflows/gitleaks.yml@main
