@@ -1,0 +1,76 @@
+name: gitleaks
+
+# BCT-1364: secret scan. This repo is public, and a public repo cannot call the
+# private org workflow benchmark-ct/.github/.github/workflows/gitleaks.yml, so this
+# is a standalone copy of it. Keep the two in step. The check is "gitleaks / scan". Only the new commits are
+# scanned (the PR's commits, or the pushed range on main). Known false positives
+# go in a .gitleaksignore file (finding fingerprints) at the repo root.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: gitleaks / scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks 8.30.1 (pinned by sha256)
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+
+      - name: Write the org config
+        run: |
+          cat > /tmp/gitleaks.toml <<'EOF'
+          title = "benchmark-ct gitleaks config (BCT-1364)"
+
+          # Start from the gitleaks default rules; add what they miss.
+          [extend]
+          useDefault = true
+
+          # The default rules do not detect Tailscale keys (BCT-1364 register rows #1-#6).
+          [[rules]]
+          id = "tailscale-key"
+          description = "Tailscale auth key, OAuth client secret or API key"
+          regex = '''tskey-(?:auth|client|api|webhook|scim)-[A-Za-z0-9]{8,}-[A-Za-z0-9]{16,}'''
+          keywords = ["tskey-"]
+
+          # The default rules do not detect a password in SQL role DDL (register row #9).
+          [[rules]]
+          id = "sql-role-password"
+          description = "Password in a SQL CREATE/ALTER ROLE or USER statement"
+          regex = '''(?i)\b(?:create|alter)\s+(?:role|user)\b[^;]*?\bpassword\s+'([^']{8,})\''''
+          secretGroup = 1
+          keywords = ["password"]
+
+          [[rules.allowlists]]
+          description = "Placeholders"
+          regexes = ['''(?i)^(?:changeme|replace\w*|<[^>]*>|x+|\*+|password)$''']
+
+          # PostHog phc_ project keys are public, client-side ingestion keys by design.
+          [[allowlists]]
+          description = "PostHog public project keys"
+          regexes = ['''phc_[A-Za-z0-9]{30,}''']
+          EOF
+
+      - name: Scan the new commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            range="-1 $HEAD"
+          else
+            range="$BASE..$HEAD"
+          fi
+          echo "Scanning: $range"
+          /tmp/gitleaks git . --config /tmp/gitleaks.toml --log-opts="$range" --redact --no-banner --exit-code 1
